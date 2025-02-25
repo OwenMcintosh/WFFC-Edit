@@ -11,6 +11,8 @@
 #include "DisplayChunk.h"
 #include "ChunkObject.h"
 #include "InputCommands.h"
+#include "Camera.h"
+#include "ObjectManager.h"
 #include <vector>
 
 
@@ -29,6 +31,7 @@ public:
 
 	// Basic game loop
 	void Tick(InputCommands * Input);
+	int MousePicking();
 	void Render();
 
 	// Rendering helpers
@@ -64,24 +67,17 @@ private:
 
 	void XM_CALLCONV DrawGrid(DirectX::FXMVECTOR xAxis, DirectX::FXMVECTOR yAxis, DirectX::FXMVECTOR origin, size_t xdivs, size_t ydivs, DirectX::GXMVECTOR color);
 
-	//tool specific
+	// Tool specific
 	std::vector<DisplayObject>			m_displayList;
 	DisplayChunk						m_displayChunk;
 	InputCommands						m_InputCommands;
 
-	//functionality
-	float								m_movespeed;
+	// Camera
+	std::unique_ptr<Camera>				m_camera;
 
-	//camera
-	DirectX::SimpleMath::Vector3		m_camPosition;
-	DirectX::SimpleMath::Vector3		m_camOrientation;
-	DirectX::SimpleMath::Vector3		m_camLookAt;
-	DirectX::SimpleMath::Vector3		m_camLookDirection;
-	DirectX::SimpleMath::Vector3		m_camRight;
-	float m_camRotRate;
-
-	//control variables
+	// Control variables
 	bool m_grid;							//grid rendering on / off
+	
 	// Device resources.
     std::shared_ptr<DX::DeviceResources>    m_deviceResources;
 
@@ -125,6 +121,9 @@ private:
     DirectX::SimpleMath::Matrix                                             m_world;
     DirectX::SimpleMath::Matrix                                             m_view;
     DirectX::SimpleMath::Matrix                                             m_projection;
+
+	RECT																	m_ScreenDimensions;
+	std::vector<int>														m_SelectedObjects;
 
 
 };

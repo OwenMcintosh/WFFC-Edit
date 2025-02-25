@@ -32,10 +32,9 @@ SelectDialogue::~SelectDialogue()
 }
 
 ///pass through pointers to the data in the tool we want to manipulate
-void SelectDialogue::SetObjectData(std::vector<SceneObject>* SceneGraph, int * selection)
+void SelectDialogue::SetObjectData(std::vector<SceneObject>* SceneGraph, std::vector<int> *selection)
 {
 	m_sceneGraph = SceneGraph;
-	m_currentSelection = selection;
 
 	//roll through all the objects in the scene graph and put an entry for each in the listbox
 	int numSceneObjects = m_sceneGraph->size();

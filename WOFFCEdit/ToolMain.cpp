@@ -1,5 +1,6 @@
 #include "ToolMain.h"
 #include "resource.h"
+#include "ObjectManager.h"
 #include <vector>
 #include <sstream>
 
@@ -9,16 +10,37 @@ ToolMain::ToolMain()
 {
 
 	m_currentChunk = 0;		//default value
-	m_selectedObject = 0;	//initial selection ID
+	m_selectedObjectList = ObjectManager::Instance().getSelectedList();	//initial selection ID
 	m_sceneGraph.clear();	//clear the vector for the scenegraph
 	m_databaseConnection = NULL;
 
-	//zero input commands
-	m_toolInputCommands.forward		= false;
-	m_toolInputCommands.back		= false;
-	m_toolInputCommands.left		= false;
-	m_toolInputCommands.right		= false;
+	//zero keyboard input commands
+	m_toolInputCommands.forward				= false;
+	m_toolInputCommands.back				= false;
+	m_toolInputCommands.left				= false;
+	m_toolInputCommands.right				= false;
+	m_toolInputCommands.up					= false;
+	m_toolInputCommands.down				= false;
+			
+	m_toolInputCommands.rotRight			= false;
+	m_toolInputCommands.rotLeft				= false;
+	m_toolInputCommands.rotUp				= false;
+	m_toolInputCommands.rotDown				= false;
 	
+	m_toolInputCommands.control				= false;
+		
+	// Zero mouse input commands		
+	m_toolInputCommands.mouseXCoord			= 0.f;
+	m_toolInputCommands.mouseYCoord			= 0.f;
+			
+	m_toolInputCommands.LeftClick			= false;
+	m_toolInputCommands.RightClick			= false;
+		
+	m_toolInputCommands.WindowLock			= false;
+	m_toolInputCommands.WindowLockToggler	= false;
+	
+	//m_selectedObject = &ObjectManager::Instance().getSelectedList();
+
 }
 
 
@@ -28,10 +50,10 @@ ToolMain::~ToolMain()
 }
 
 
-int ToolMain::getCurrentSelectionID()
+std::vector<int>* ToolMain::getCurrentSelectionID()
 {
 
-	return m_selectedObject;
+	return ObjectManager::Instance().getSelectedList();
 }
 
 void ToolMain::onActionInitialise(HWND handle, int width, int height)
@@ -287,6 +309,13 @@ void ToolMain::Tick(MSG *msg)
 		//add to scenegraph
 		//resend scenegraph to Direct X renderer
 
+	if (m_toolInputCommands.LeftClick)
+	{
+		m_d3dRenderer.MousePicking();
+		m_toolInputCommands.LeftClick = false;
+	}
+	
+
 	//Renderer Update Call
 	m_d3dRenderer.Tick(&m_toolInputCommands);
 }
@@ -306,10 +335,25 @@ void ToolMain::UpdateInput(MSG * msg)
 		break;
 
 	case WM_MOUSEMOVE:
+		//Get the mouse positions on the x and y 
+		m_toolInputCommands.mouseXCoord = GET_X_LPARAM(msg->lParam);
+		m_toolInputCommands.mouseYCoord = GET_Y_LPARAM(msg->lParam);
 		break;
 
-	case WM_LBUTTONDOWN:	//mouse button down,  you will probably need to check when its up too
-		//set some flag for the mouse button in inputcommands
+	case WM_LBUTTONDOWN:
+		m_toolInputCommands.LeftClick = true;
+		break;
+		
+	case WM_LBUTTONUP:
+		m_toolInputCommands.LeftClick = false;
+		break;
+		
+	case WM_RBUTTONDOWN:
+		m_toolInputCommands.RightClick = true;
+		break;
+		
+	case WM_RBUTTONUP:
+		m_toolInputCommands.RightClick = false;
 		break;
 
 	}
@@ -326,7 +370,8 @@ void ToolMain::UpdateInput(MSG * msg)
 		m_toolInputCommands.back = true;
 	}
 	else m_toolInputCommands.back = false;
-	if (m_keyArray['A'])
+	
+	if (m_keyArray['A'] && !m_toolInputCommands.control)
 	{
 		m_toolInputCommands.left = true;
 	}
@@ -337,17 +382,63 @@ void ToolMain::UpdateInput(MSG * msg)
 		m_toolInputCommands.right = true;
 	}
 	else m_toolInputCommands.right = false;
-	//rotation
+	
 	if (m_keyArray['E'])
 	{
-		m_toolInputCommands.rotRight = true;
+		m_toolInputCommands.up = true;
 	}
-	else m_toolInputCommands.rotRight = false;
+	else m_toolInputCommands.up = false;
+	
 	if (m_keyArray['Q'])
+	{
+		m_toolInputCommands.down = true;
+	}
+	else m_toolInputCommands.down = false;
+
+	//rotation
+	if (m_keyArray['Z'])
 	{
 		m_toolInputCommands.rotLeft = true;
 	}
 	else m_toolInputCommands.rotLeft = false;
+	
+	if (m_keyArray['C'])
+	{
+		m_toolInputCommands.rotRight = true;
+	}
+	else m_toolInputCommands.rotRight = false;
 
-	//WASD
+	if (m_keyArray['P'])
+	{
+		m_toolInputCommands.rotUp = true;
+	}
+	else m_toolInputCommands.rotUp = false;
+	
+	if (m_keyArray['O'])
+	{
+		m_toolInputCommands.rotDown = true;
+	}
+	else m_toolInputCommands.rotDown = false;
+
+	//// toggles window lock, avoiding repeated presses if user doesn't let go within one frame
+	//if (m_toolInputCommands.RightClick && !m_toolInputCommands.WindowLockToggler)
+	//{
+	//	m_toolInputCommands.WindowLock = !m_toolInputCommands.WindowLock;
+	//}
+
+	m_toolInputCommands.WindowLock = m_toolInputCommands.RightClick;
+
+	if (ctrl_key) {
+		m_toolInputCommands.control = true;
+	}
+	else m_toolInputCommands.control = false;
+
+	if (ctrl_key && m_keyArray['A']) {
+		m_toolInputCommands.selectAll = true;
+	}
+	else {
+		m_toolInputCommands.selectAll = false;
+	}
+
+	
 }

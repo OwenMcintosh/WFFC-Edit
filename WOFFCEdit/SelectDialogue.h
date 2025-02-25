@@ -15,7 +15,7 @@ public:
 	SelectDialogue(CWnd* pParent, std::vector<SceneObject>* SceneGraph);   // modal // takes in out scenegraph in the constructor
 	SelectDialogue(CWnd* pParent = NULL);
 	virtual ~SelectDialogue();
-	void SetObjectData(std::vector<SceneObject>* SceneGraph, int * Selection);	//passing in pointers to the data the class will operate on.
+	void SetObjectData(std::vector<SceneObject>* SceneGraph, std::vector<int> *selection);	//passing in pointers to the data the class will operate on.
 	
 // Dialog Data
 #ifdef AFX_DESIGN_TIME

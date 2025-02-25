@@ -23,36 +23,7 @@ Game::Game()
 	//initial Settings
 	//modes
 	m_grid = false;
-
-	//functional
-	m_movespeed = 0.30;
-	m_camRotRate = 3.0;
-
-	//camera
-	m_camPosition.x = 0.0f;
-	m_camPosition.y = 3.7f;
-	m_camPosition.z = -3.5f;
-
-	m_camOrientation.x = 0;
-	m_camOrientation.y = 0;
-	m_camOrientation.z = 0;
-
-	m_camLookAt.x = 0.0f;
-	m_camLookAt.y = 0.0f;
-	m_camLookAt.z = 0.0f;
-
-	m_camLookDirection.x = 0.0f;
-	m_camLookDirection.y = 0.0f;
-	m_camLookDirection.z = 0.0f;
-
-	m_camRight.x = 0.0f;
-	m_camRight.y = 0.0f;
-	m_camRight.z = 0.0f;
-
-	m_camOrientation.x = 0.0f;
-	m_camOrientation.y = 0.0f;
-	m_camOrientation.z = 0.0f;
-
+	
 }
 
 Game::~Game()
@@ -71,10 +42,12 @@ void Game::Initialize(HWND window, int width, int height)
 {
     m_gamePad = std::make_unique<GamePad>();
 
-    m_keyboard = std::make_unique<Keyboard>();
+	m_keyboard = std::make_unique<Keyboard>();
 
-    m_mouse = std::make_unique<Mouse>();
+	m_mouse = std::make_unique<Mouse>();
     m_mouse->SetWindow(window);
+	
+	m_camera = std::make_unique<Camera>();			// Camera
 
     m_deviceResources->SetWindow(window, width, height);
 
@@ -106,6 +79,8 @@ void Game::Initialize(HWND window, int width, int height)
     m_effect1->Play(true);
     m_effect2->Play();
 #endif
+
+    GetClientRect(window, &m_ScreenDimensions);
 }
 
 void Game::SetGridState(bool state)
@@ -119,6 +94,12 @@ void Game::Tick(InputCommands *Input)
 {
 	//copy over the input commands so we have a local version to use elsewhere.
 	m_InputCommands = *Input;
+
+	m_camera->HandleInput(&m_InputCommands);
+
+	ObjectManager::Instance().Initialise(&m_displayList, m_deviceResources, &m_InputCommands);
+	ObjectManager::Instance().HandleInput();
+
     m_timer.Tick([&]()
     {
         Update(m_timer);
@@ -137,58 +118,88 @@ void Game::Tick(InputCommands *Input)
     Render();
 }
 
+int Game::MousePicking()
+{
+
+	int selectedID = -1;
+	float pickedDistance = 0;
+	//Handle 
+	float closestDistance = 200;
+
+	//setup near and far planes of frustum with mouse X and mouse y passed down from Toolmain. 
+	//they may look the same but note, the difference in Z
+	const XMVECTOR nearSource = XMVectorSet(m_InputCommands.mouseXCoord, m_InputCommands.mouseYCoord, 0.0f, 1.0f);
+	const XMVECTOR farSource = XMVectorSet(m_InputCommands.mouseXCoord, m_InputCommands.mouseYCoord, 1.0f, 1.0f);
+
+	//Loop through entire display list of objects and pick with each in turn. 
+	for (int i = 0; i < m_displayList.size(); i++)
+	{
+		//Get the scale factor and translation of the object
+		const XMVECTORF32 scale = { m_displayList[i].m_scale.x, m_displayList[i].m_scale.y, m_displayList[i].m_scale.z };
+		const XMVECTORF32 translate = {
+			m_displayList[i].m_position.x, m_displayList[i].m_position.y, m_displayList[i].m_position.z
+		};
+
+		//convert euler angles into a quaternion for the rotation of the object
+		XMVECTOR rotate = Quaternion::CreateFromYawPitchRoll(m_displayList[i].m_orientation.y * 3.1415 / 180,
+			m_displayList[i].m_orientation.x * 3.1415 / 180,
+			m_displayList[i].m_orientation.z * 3.1415 / 180);
+
+		//create set the matrix of the selected object in the world based on the translation, scale and rotation.
+		XMMATRIX local = m_world * XMMatrixTransformation(g_XMZero, Quaternion::Identity, scale, g_XMZero, rotate,
+			translate);
+
+		//Unproject the points on the near and far plane, with respect to the matrix we just created.
+		XMVECTOR nearPoint = XMVector3Unproject(nearSource, 0.0f, 0.0f, m_ScreenDimensions.right,
+			m_ScreenDimensions.bottom,
+			m_deviceResources->GetScreenViewport().MinDepth,
+			m_deviceResources->GetScreenViewport().MaxDepth, m_projection,
+			m_camera->GetViewMatrix(), local);
+		XMVECTOR farPoint = XMVector3Unproject(farSource, 0.0f, 0.0f, m_ScreenDimensions.right,
+			m_ScreenDimensions.bottom,
+			m_deviceResources->GetScreenViewport().MinDepth,
+			m_deviceResources->GetScreenViewport().MaxDepth, m_projection,
+			m_camera->GetViewMatrix(), local);
+
+		//turn the transformed points into our picking vector. 
+		XMVECTOR pickingVector = farPoint - nearPoint;
+		pickingVector = XMVector3Normalize(pickingVector);
+		// TODO Merge select systems to use just one method, possibly by clearing the vector each time, unless shift is held.
+		//loop through mesh list for object
+		for (int y = 0; y < m_displayList[i].m_model.get()->meshes.size(); y++)
+		{
+			//checking for ray intersection
+			if (m_displayList[i].m_model.get()->meshes[y]->boundingBox.Intersects(nearPoint, pickingVector, pickedDistance))
+			{
+
+				//If the object is closer to the picked distance
+				if (pickedDistance <= closestDistance)
+				{
+					closestDistance = pickedDistance;
+					selectedID = i;
+				}
+			}
+		}
+	}
+
+
+	ObjectManager::Instance().SelectOrDeselectObject(selectedID);
+
+    //if we got a hit.  return it.  
+	return selectedID;
+}
+
+
 // Updates the world.
 void Game::Update(DX::StepTimer const& timer)
 {
-	//TODO  any more complex than this, and the camera should be abstracted out to somewhere else
-	//camera motion is on a plane, so kill the 7 component of the look direction
-	Vector3 planarMotionVector = m_camLookDirection;
-	planarMotionVector.y = 0.0;
 
-	if (m_InputCommands.rotRight)
-	{
-		m_camOrientation.y -= m_camRotRate;
-	}
-	if (m_InputCommands.rotLeft)
-	{
-		m_camOrientation.y += m_camRotRate;
-	}
+	m_camera->Update();
 
-	//create look direction from Euler angles in m_camOrientation
-	m_camLookDirection.x = sin((m_camOrientation.y)*3.1415 / 180);
-	m_camLookDirection.z = cos((m_camOrientation.y)*3.1415 / 180);
-	m_camLookDirection.Normalize();
-
-	//create right vector from look Direction
-	m_camLookDirection.Cross(Vector3::UnitY, m_camRight);
-
-	//process input and update stuff
-	if (m_InputCommands.forward)
-	{	
-		m_camPosition += m_camLookDirection*m_movespeed;
-	}
-	if (m_InputCommands.back)
-	{
-		m_camPosition -= m_camLookDirection*m_movespeed;
-	}
-	if (m_InputCommands.right)
-	{
-		m_camPosition += m_camRight*m_movespeed;
-	}
-	if (m_InputCommands.left)
-	{
-		m_camPosition -= m_camRight*m_movespeed;
-	}
-
-	//update lookat point
-	m_camLookAt = m_camPosition + m_camLookDirection;
-
-	//apply camera vectors
-    m_view = Matrix::CreateLookAt(m_camPosition, m_camLookAt, Vector3::UnitY);
-
-    m_batchEffect->SetView(m_view);
+    m_batchEffect->SetView(m_camera->GetViewMatrix());
     m_batchEffect->SetWorld(Matrix::Identity);
-	m_displayChunk.m_terrainEffect->SetView(m_view);
+	
+	m_displayChunk.m_terrainEffect->SetView(m_camera->GetViewMatrix());
 	m_displayChunk.m_terrainEffect->SetWorld(Matrix::Identity);
 
 #ifdef DXTK_AUDIO
@@ -242,12 +253,6 @@ void Game::Render()
 		const XMVECTORF32 yaxis = { 0.f, 0.f, 512.f };
 		DrawGrid(xaxis, yaxis, g_XMZero, 512, 512, Colors::Gray);
 	}
-	//CAMERA POSITION ON HUD
-	m_sprites->Begin();
-	WCHAR   Buffer[256];
-	std::wstring var = L"Cam X: " + std::to_wstring(m_camPosition.x) + L"Cam Z: " + std::to_wstring(m_camPosition.z);
-	m_font->DrawString(m_sprites.get(), var.c_str() , XMFLOAT2(100, 10), Colors::Yellow);
-	m_sprites->End();
 
 	//RENDER OBJECTS FROM SCENEGRAPH
 	int numRenderObjects = m_displayList.size();
@@ -264,7 +269,7 @@ void Game::Render()
 
 		XMMATRIX local = m_world * XMMatrixTransformation(g_XMZero, Quaternion::Identity, scale, g_XMZero, rotate, translate);
 
-		m_displayList[i].m_model->Draw(context, *m_states, local, m_view, m_projection, false);	//last variable in draw,  make TRUE for wireframe
+		m_displayList[i].m_model->Draw(context, *m_states, local, m_camera->GetViewMatrix(), m_projection, false);	//last variable in draw,  make TRUE for wireframe
 
 		m_deviceResources->PIXEndEvent();
 	}
@@ -278,6 +283,16 @@ void Game::Render()
 
 	//Render the batch,  This is handled in the Display chunk becuase it has the potential to get complex
 	m_displayChunk.RenderBatch(m_deviceResources);
+
+	//CAMERA POSITION ON HUD
+	m_sprites->Begin();
+	WCHAR   Buffer[256];
+	
+	Vector3 lv_CamPosition = m_camera->GetCameraPosition();
+	std::wstring var = L"Cam X: " + std::to_wstring(lv_CamPosition.x) + L"    Cam Y: " + std::to_wstring(lv_CamPosition.y) + L"    Cam Z: " + std::to_wstring(lv_CamPosition.z);
+	m_font->DrawString(m_sprites.get(), var.c_str() , XMFLOAT2(0, 0), Colors::Yellow);
+	
+	m_sprites->End();
 
     m_deviceResources->Present();
 }

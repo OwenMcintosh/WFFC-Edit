@@ -8,6 +8,7 @@
 #include "InputCommands.h"
 #include <vector>
 
+#define ctrl_key m_keyArray[17]
 
 class ToolMain
 {
@@ -16,7 +17,7 @@ public: //methods
 	~ToolMain();
 
 	//onAction - These are the interface to MFC
-	int		getCurrentSelectionID();										//returns the selection number of currently selected object so that It can be displayed.
+	std::vector<int>* getCurrentSelectionID();								//returns the selection number of currently selected object so that It can be displayed.
 	void	onActionInitialise(HWND handle, int width, int height);			//Passes through handle and hieght and width and initialises DirectX renderer and SQL LITE
 	void	onActionFocusCamera();
 	void	onActionLoad();													//load the current chunk
@@ -27,9 +28,9 @@ public: //methods
 	void	UpdateInput(MSG *msg);
 
 public:	//variables
-	std::vector<SceneObject>    m_sceneGraph;	//our scenegraph storing all the objects in the current chunk
-	ChunkObject					m_chunk;		//our landscape chunk
-	int m_selectedObject;						//ID of current Selection
+	std::vector<SceneObject>    m_sceneGraph;								//our scenegraph storing all the objects in the current chunk
+	ChunkObject					m_chunk;									//our landscape chunk
+	std::vector<int>*			m_selectedObjectList;						//ID of current Selections
 
 private:	//methods
 	void	onContentAdded();
